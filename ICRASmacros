@@ -1,0 +1,795 @@
+
+Sub Update_Links()
+
+'Selection.WholeStory
+ '   Selection.Fields.Update
+  '  Selection.MoveUp Unit:=wdLine, Count:=1
+
+'Another method
+
+'Each "oStory" is a section of the document (normal body, header, footer). This should update links
+'in both the main body and the header/footers.
+Dim oStory As Range
+For Each oStory In ActiveDocument.StoryRanges
+    oStory.Fields.Update
+    If oStory.StoryType <> wdMainTextStory Then
+        While Not (oStory.NextStoryRange Is Nothing)
+        Set oStory = oStory.NextStoryRange
+        oStory.Fields.Update
+        Wend
+    End If
+Next oStory
+Set oStory = Nothing
+
+
+End Sub
+Sub Change_Links()
+' Macro recorded 12/28/2004 by LaFleur
+'
+'This macro will attempt to link the existing fields (ratings, country name, date, etc) to a PKI
+'that the user selects.
+'**IMPORTANT**
+'To avoid any future problems, it is recommended that the user run this macro only after
+'the PKI has been created and placed in the correct directory (not the user C:, for example).
+'The macro isn't able to change the link more than once (due to the [Replace] code being inflexible)
+'
+
+'notes are above each section and to the right of the code when possible (green)
+
+
+'VB (Visual Basic) requires that you specify what type of variable you are using
+Dim alink As Field, linktype As Range, linkfile As Range
+Dim linklocation As Range, i As Integer, j As Integer, linkcode As Range
+Dim Message, Title, Default
+Dim Newfile As String
+Dim xlFile As String '*
+Dim counter As Integer
+Dim Filter As String
+Dim oStory As Range '**
+Set xlApp = CreateObject("Excel.Application")  '*
+
+
+With Dialogs(wdDialogFileOpen)  'To open the file/open dialog (in order to select the PKI file)
+                
+                'I think that the path has to be formatted as such.
+                'To see an example, try to do an Edit>Links and look at the resulting code
+                'or type "alt-F9" to see the existing code and file paths. Note the multiple "\"
+    If .Display Then
+        Newfile = WordBasic.FilenameInfo$(.Name, 6)  'this sets [Newfile] to the file selected above
+        xlFile = Newfile                            'sets [xlFile] from [Newfile]
+        Newfile = Replace(Newfile, "\", "\\")       'Doubles the number of "\" in the path of [Newfile]
+                                                    'this is based on what you see if you create a link
+                                                    'and look at the field code (Alt-F9)
+        'Newfile = Replace(Newfile, "G:", "\\\\exim2k-fs01\\private\\lafleur")   'this is possibly not
+                                                                                'necessary. I think it was
+                                                                                'being used by my during testing
+        'note that new we have 2 paths: 1 for [Newfile] (with the extra "\")
+        'and 1 for [xlFile] (with the standard path).
+                                                                                
+                'To open the file in Excel. This will speed up the Link update.
+            
+            'xlApp.Visible = True                   'I think I had problems with this method
+            
+            Set xlWB = xlApp.Workbooks.Open(xlFile)     '**Important: You will see odd behaviour, though nothing
+                                                        'harmful, if the PKI is already open. The macro will run
+                                                        'without problems, but at the end, Windows will notify
+                                                        'you that the file is now "read/write" and will open
+                                                        'another window with the file. Just close it or write
+                                                        'code here to address this.
+            
+                
+                'The "xlApp.UserControl = True" is there to prevent the "Set xlApp = Nothing" line
+                'from causing your Excel Application to immediately call .Quit on itself when there
+                'are no more references to it. For some reason, this does not seem necessarry here,
+                'but I would still leave it in. It certainly does no harm.
+            xlApp.UserControl = True
+            Set xlApp = Nothing               '"Set xlApp = Nothing" seems to free up the file for the user.
+
+                
+    End If
+            
+End With
+
+'************************************************
+'This block will change the links of all the fields in the main body of the document ONLY
+
+counter = 0
+For Each alink In ActiveDocument.Fields
+    If alink.Type = wdFieldLink Then
+        Set linkcode = alink.Code
+        i = InStr(linkcode, Chr(34))
+        Set linktype = alink.Code
+        linktype.End = linktype.Start + i
+        j = InStr(Mid(linkcode, i + 1), Chr(34))
+        Set linklocation = alink.Code
+        linklocation.Start = linklocation.Start + i + j - 1
+        
+        If counter = 0 Then
+            Set linkfile = alink.Code
+            linkfile.End = linkfile.Start + i + j - 1
+            linkfile.Start = linkfile.Start + i
+       
+        End If
+        
+        linkcode.Text = linktype & Newfile & linklocation
+        counter = counter + 1
+    
+    End If
+Next alink
+'************************************************
+
+'************************************************
+'This block is here to change the links in the Header of the document,
+'mainly, the country name that appears on each page
+
+Dim oField As Field
+Dim oSection As Section
+Dim oHeader As HeaderFooter
+Dim oFooter As HeaderFooter
+
+For Each oSection In ActiveDocument.Sections
+
+    For Each oHeader In oSection.Headers
+        If oHeader.Exists Then
+            'For Each oField In oHeader.Range.Fields
+                'oField.Unlink
+'--------------------------------------------------
+'a copy of the original change_link block from above, repeated with a small modification
+                
+                counter = 0
+            For Each alink In oHeader.Range.Fields          'modified
+            'For Each alink In ActiveDocument.Fields        'original
+                If alink.Type = wdFieldLink Then
+                    Set linkcode = alink.Code
+                    i = InStr(linkcode, Chr(34))
+                    Set linktype = alink.Code
+                    linktype.End = linktype.Start + i
+                    j = InStr(Mid(linkcode, i + 1), Chr(34))
+                    Set linklocation = alink.Code
+                    linklocation.Start = linklocation.Start + i + j - 1
+        
+                    If counter = 0 Then
+                    Set linkfile = alink.Code
+                        linkfile.End = linkfile.Start + i + j - 1
+                        linkfile.Start = linkfile.Start + i
+       
+                    End If
+        
+                    linkcode.Text = linktype & Newfile & linklocation
+                    counter = counter + 1
+    
+                End If
+            Next alink
+'====================================================
+            'Next oField
+        End If
+    Next oHeader
+
+'Basic code for use in footers, if necessary in the future
+    'For Each oFooter In oSection.Footers
+        'If oFooter.Exists Then
+             'For Each oField In oFooter.Range.Fields
+                 'oField.Unlink
+            'Next oField
+        'End If
+    'Next oFooter
+
+Next oSection
+
+'***************************************************
+
+'This updates all fields. Formatting needs to be checked since it doesn't seem to
+'maintain the Caps in the "Current rating" and the "Date" fields.
+
+For Each oStory In ActiveDocument.StoryRanges
+    oStory.Fields.Update
+    If oStory.StoryType <> wdMainTextStory Then
+        While Not (oStory.NextStoryRange Is Nothing)
+        Set oStory = oStory.NextStoryRange
+        oStory.Fields.Update
+        Wend
+    End If
+Next oStory
+Set oStory = Nothing
+
+End Sub
+Sub CleanUp()
+'
+' CleanUp Macro
+' Macro recorded 10/31/2005 by LaFleur
+'
+'This macro will do a few things to Clean Up the SRC text:
+'   1) it will find any " %" and replace with "%" (remove the space)
+'   2) it will replace the word "percent" with "%"
+'   3) it will change every instance of "Mr. X" to ensure that the prefix and the name
+'       remain on the same line  [inserts a non-breakable space "^s"]
+'   4) it will do the same for country names with spaces
+'   5) it will correct some common country spellings.
+    
+'**Feel free to add/remove/modify to include other issues that can be automatically corrected.
+
+'
+    Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Mr. "
+        .Replacement.Text = "Mr.^s"         'the "^s" is the symbol for a non-breakable space
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+  Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "percent"
+        .Replacement.Text = "%"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = True
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = " %"
+        .Replacement.Text = "%"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Sri Lanka"
+        .Replacement.Text = "Sri^sLanka"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Burkina Faso"
+        .Replacement.Text = "Burkina^sFaso"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+         Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Côte D'Ivoire"
+        .Replacement.Text = "Côte^sD'Ivoire"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Cote D'Ivoire"
+        .Replacement.Text = "Côte^sD'Ivoire"    'correct spelling includes the accent and capital "D"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Equatorial Guinea"
+        .Replacement.Text = "Equatorial^sGuinea"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Cape Verde"
+        .Replacement.Text = "Cape^sVerde"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Sao Tome"
+        .Replacement.Text = "Sao^sTome"     'I believe the correct name has accents (São Tomé)
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "South Africa"
+        .Replacement.Text = "South^sAfrica"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Costa Rica"
+        .Replacement.Text = "Costa^sRica"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Dominican Republic"
+        .Replacement.Text = "Dominican^sRepublic"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "El Salvador"
+        .Replacement.Text = "El^sSalvador"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Netherlands Antilles"
+        .Replacement.Text = "Netherlands^sAntilles"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "St. Kitts and Nevis"
+        .Replacement.Text = "St.^sKitts^sand^sNevis"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "St. Lucia"
+        .Replacement.Text = "St.^sLucia"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "St. Vincent"
+        .Replacement.Text = "St.^sVincent"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Trinidad and Tobago"
+        .Replacement.Text = "Trinidad^sand^sTobago"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Czech Republic"
+        .Replacement.Text = "Czech^sRepublic"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Slovak Republic"
+        .Replacement.Text = "Slovak^sRepublic"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "East Timor"
+        .Replacement.Text = "East^sTimor"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Hong Kong"
+        .Replacement.Text = "Hong^sKong"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "North Korea"
+        .Replacement.Text = "North^sKorea"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "South Korea"
+        .Replacement.Text = "South^sKorea"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Marshall Islands"
+        .Replacement.Text = "Marshall^sIslands"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "New Zealand"
+        .Replacement.Text = "New^sZealand"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Papua-New Guinea"
+        .Replacement.Text = "Papua-New^sGuinea"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Western Samoa"
+        .Replacement.Text = "Western^sSamoa"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+     Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Saudi Arabia"
+        .Replacement.Text = "Saudi^sArabia"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+         Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "  "                                'repeat this search three times to catch all double spaces
+        .Replacement.Text = " "
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+             Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "  "                                '2nd time
+        .Replacement.Text = " "
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+             Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "  "                                '3rd time
+        .Replacement.Text = " "
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+    
+                Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = ". "                                'Add double space to beginning of new sentence.
+        .Replacement.Text = ".  "
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+ 
+ 
+                Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Rationale: "                                'Add double space to styles.
+        .Replacement.Text = "Rationale:  "
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+ 
+ 
+                Selection.Find.ClearFormatting
+    Selection.Find.Replacement.ClearFormatting
+    With Selection.Find
+        .Text = "Analysis: "                                'Add double space to styles.
+        .Replacement.Text = "Analysis:  "
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+    End With
+    Selection.Find.Execute Replace:=wdReplaceAll
+ 
+ 
+ 
+End Sub
+
+
